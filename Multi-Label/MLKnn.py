@@ -8,12 +8,12 @@ from sklearn.preprocessing import MinMaxScaler,StandardScaler
 from scipy.sparse import csr_matrix, lil_matrix
 from skmultilearn.adapt import MLkNN
 import seaborn as sns
-import xgboost as xgb
 import warnings
 import numpy as np
 from matplotlib import cm
 from sklearn.model_selection import KFold
 from sklearn.model_selection import GridSearchCV
+from collections import defaultdict
 
 
 def plot_data(df):
@@ -88,8 +88,10 @@ def clean_data(data):
 
     return X,y
 
+
+
 def MLKnn_GridSearch(X_train,X_test,y_train,y_test):
-    parameters = {'k': range(1, 5), 's': [ 0.2,0.3,0.4, 0.5,0.6, 0.7, 1.0]}
+    parameters = {'k': range(1, 12), 's': [ 0.2,0.3,0.4, 0.5,0.6, 0.7, 1.0]}
     score = 'f1_macro'
 
     clf = GridSearchCV(MLkNN(), parameters, scoring=score)
@@ -98,7 +100,7 @@ def MLKnn_GridSearch(X_train,X_test,y_train,y_test):
     print(clf.best_params_, clf.best_score_)
 
 
-def MlKnn(X_train, X_test, y_train, y_test):
+def MlKnn_with_Grid_Parameters(X_train, X_test, y_train, y_test):
 
     X_train = lil_matrix(X_train).toarray()
     y_train = lil_matrix(y_train).toarray()
@@ -107,8 +109,9 @@ def MlKnn(X_train, X_test, y_train, y_test):
 
 
 
+
     print("MlKnn")
-    model = MLkNN(k=3,s=0.2).fit(X_train,y_train)
+    model = MLkNN(k=5,s=0.2).fit(X_train,y_train)
     hamming = hamming_loss(y_test, model.predict(X_test))
     Subset_Accuracy = accuracy_score(y_test, model.predict(X_test))
     Precision = precision_score(y_test, model.predict(X_test), average="micro")
@@ -128,13 +131,20 @@ def MlKnn(X_train, X_test, y_train, y_test):
 
 
 
+
+
+
 if __name__ == '__main__':
     warnings.filterwarnings("ignore")
     data, meta = scipy.io.arff.loadarff(r'emotions.arff')
     X,y = clean_data(data)
 
+    grid = False
+    mlknn_with_grid = True
+
 
     kf = KFold(10)
+
     hamming_arr = []
     accuracy_arr = []
     recall_arr = []
@@ -142,45 +152,107 @@ if __name__ == '__main__':
     f1_arr = []
     coverage_arr = []
     aps_arr = []
+
+    hamming = defaultdict(list)
+    Subset_Accuracy = defaultdict(list)
+    Precision = defaultdict(list)
+    Recall = defaultdict(list)
+    f1 = defaultdict(list)
+    cov = defaultdict(list)
+    aps = defaultdict(list)
+
     rankingloss_arr = []
-    grid = False
+
+
+
     for train_index, test_index in kf.split(X):
 
         X_train, X_test = X[train_index], X[test_index]
         y_train, y_test = y[train_index], y[test_index]
         if(grid):
             MLKnn_GridSearch(X_train,X_test,y_train,y_test)
-        else:
-            hamming, sub_accuracy, recall, precision, f1= MlKnn(X_train, X_test, y_train, y_test)
+        elif(mlknn_with_grid):
+
+
+            hamming, sub_accuracy, recall, precision, f1= MlKnn_with_Grid_Parameters(X_train, X_test, y_train, y_test)
             hamming_arr.append(hamming)
             accuracy_arr.append(sub_accuracy)
             recall_arr.append(recall)
             precision_arr.append(precision)
             f1_arr.append(f1)
-            #coverage_arr.append(coverage)
-            #aps_arr.append(aps)
-            #rankingloss_arr.append(rankingloss)
 
-            finalscores = []
-            all = [hamming_arr,accuracy_arr ,recall_arr ,precision_arr ,f1_arr ]
-            for lst in all:
-                finalscores.append(np.array(lst).mean())
 
-    objects = ('Hamming Loss', 'Subset Accuracy', 'Recall', 'Precision', 'f1')
-    y_pos = np.arange(len(objects))
 
-    width = 0.35
-    fig, ax = plt.subplots()
-    b = ax.bar(y_pos, finalscores, color='brown', align='center')
-    ax.set_xticks(y_pos)
-    ax.set_xticklabels(objects)
-    ax.set_ylabel('Score')
-    ax.bar_label(b, fmt='%.3f')
-    plt.title('Metrics')
-    plt.show()
+        elif mlknn_with_grid !=True and grid!=True:
 
-    #oneRest(X_train, X_test, y_train, y_test)
-    #Xboost(X_train, X_test, y_train, y_test)
+            X_train = lil_matrix(X_train).toarray()
+            y_train = lil_matrix(y_train).toarray()
+            X_test = lil_matrix(X_test).toarray()
+            y_test = lil_matrix(y_test).toarray()
+
+            k = [2, 3, 4, 5, 6, 7, 8,9,10]
+            for i in k:
+                model = MLkNN(k=i, s=0.2).fit(X_train, y_train)
+                hamming[i].append(hamming_loss(y_test, model.predict(X_test)))
+                Subset_Accuracy[i].append(accuracy_score(y_test, model.predict(X_test)))
+                Precision[i].append(precision_score(y_test, model.predict(X_test), average="micro"))
+                Recall[i].append(recall_score(y_test, model.predict(X_test), average='micro'))
+                f1[i].append(f1_score(y_test, model.predict(X_test), average='micro'))
+
+    if mlknn_with_grid !=True and grid!=True:
+        all = [hamming, Subset_Accuracy, Recall, Precision, f1]
+        for lst in all:
+            for k,v in lst.items():
+                if lst==hamming:
+                    hamming_arr.append(np.mean(v))
+                elif lst==Subset_Accuracy:
+                    accuracy_arr.append(np.mean(v))
+                elif lst==Recall:
+                    recall_arr.append(np.mean(v))
+                elif lst==Precision:
+                    precision_arr.append(np.mean(v))
+                else:
+                    f1_arr.append(np.mean(v))
+
+        y = [2,3,4,5,6,7,8,9,10]
+
+        plt.plot(y,hamming_arr,label='Hamming Loss')
+        plt.plot(y,accuracy_arr, label='Subset Accuracy')
+        plt.plot(y,recall_arr, label='Recall')
+        plt.plot(y,precision_arr, label='Precision')
+        plt.plot(y,f1_arr, label='F1 score')
+        plt.title('Metrics')
+        plt.xlabel("Number of k")
+        plt.ylabel("Scores")
+        plt.legend()
+        plt.show()
+
+
+
+
+
+    if(mlknn_with_grid):
+        finalscores = []
+        all = [hamming_arr, accuracy_arr, recall_arr, precision_arr, f1_arr]
+        for lst in all:
+            finalscores.append(np.array(lst).mean())
+
+        objects = ('Hamming Loss', 'Subset Accuracy', 'Recall', 'Precision', 'f1')
+        y_pos = np.arange(len(objects))
+
+        width = 0.35
+        fig, ax = plt.subplots()
+        b = ax.bar(y_pos, finalscores, color='brown', align='center')
+        ax.set_xticks(y_pos)
+        ax.set_xticklabels(objects)
+        ax.set_ylabel('Score')
+        ax.bar_label(b, fmt='%.3f')
+        plt.title('Metrics')
+        plt.show()
+
+
+
+
 
 
 

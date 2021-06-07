@@ -43,14 +43,19 @@ def dataset(data):
     return data
 
 
-def decision_plot(new_X_train2, new_y_train2, feature_names, test, model):
+def decision_plot(new_X_train2, new_y_train2, feature_names, test, model,classify):
     dt = DecisionTreeClassifier(random_state=0
                                 , criterion='entropy'
                                 , max_depth=1)
 
     dt.fit(new_X_train2, new_y_train2)
-    print("Decision Tree Predicts for Instance:" + str(
+    if classify=='rf':
+      print("Decision Tree Predicts for Instance:" + str(
         dt.predict(test)) + " and Random Forests predicted:" + str(model.predict(test)))
+    elif classify=='xg':
+      print("Decision Tree Predicts for Instance:" + str(
+        dt.predict(test)) + " and XGboost predicted:" + str(model.predict(test)))
+    
     fidelityPreds = dt.predict(new_X_train2)
     print("Let's see fidelity", accuracy_score(new_y_train2, fidelityPreds))
 
@@ -68,7 +73,7 @@ def decision_plot(new_X_train2, new_y_train2, feature_names, test, model):
 
 
 
-def Local_Interpretability(data):
+def Local_Interpretability(data,classify):
     # for i in data['genre'].unique():
     #   new_data = data.copy(deep=True)
     #  new_data['genre'] = new_data['genre'].apply(lambda y: y if y == i else "Not_" + i)
@@ -87,8 +92,13 @@ def Local_Interpretability(data):
     X_train = scaler.transform(X_train)
     X_test = scaler.transform(X_test)
     print(X_train.shape)
+    
+    if classify=='rf':
+          model = RandomForestClassifier().fit(X_train, y_train)
+    elif classify=='xg':
+          model = XGBClassifier(learning_rate=0.1,n_estimators=200,max_depth=50).fit(X_train, y_train)
 
-    model = RandomForestClassifier().fit(X_train, y_train)
+   
     new_y_train = model.predict(X_train)
     print(new_y_train)
     new_X_train = X_train
@@ -110,7 +120,7 @@ def Local_Interpretability(data):
         new_X_train2.append(new_X_train[i])
 
     # Decision Tree
-    dt = decision_plot(new_X_train2, new_y_train2, X.columns.values, test, model)
+    dt = decision_plot(new_X_train2, new_y_train2, X.columns.values, test, model,classify)
     inter = interactive(dt, depth=(1, 5))
     # display(inter)
 
@@ -134,7 +144,7 @@ def onevsone(data):
                 first = data.loc[data['genre'] == i]
                 second = data.loc[data['genre'] == j]
                 new_data = pd.concat([first, second])
-                Local_Interpretability(new_data)
+                Local_Interpretability(new_data,'xg')
 
 
 if __name__ == '__main__':
